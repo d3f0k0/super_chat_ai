@@ -1,28 +1,28 @@
-import type { RequestHandler } from './$types';
-import { HfInference } from "@huggingface/inference";
-import { HuggingFaceStream, StreamingTextResponse } from "ai";
-import { experimental_buildOpenAssistantPrompt } from "ai/prompts";
-import { HUGGINGFACE_KEY } from "$env/static/private";
+// src/routes/api/chat/+server.ts
+import type { RequestHandler } from './$types'
+import { OpenAI } from 'openai'
+import { OPENAI_KEY } from '$env/static/private'
+import { OpenAIStream, StreamingTextResponse } from 'ai'
 
+const fireworks = new OpenAI({baseURL: 'https://api.fireworks.ai/inference/v1', apiKey: OPENAI_KEY!})
 
-const hf = new HfInference( HUGGINGFACE_KEY)
+export const POST = (async ({ request }) => {
+  // Extract the `messages` from the body of the request
+  const { messages } = await request.json();
 
-export const POST: RequestHandler = async ({request}) => {
-    
-    const { messages } = await request.json()
+  // Request the Fireworks API for the response based on the prompt
+  const response = await fireworks.chat.completions.create({
+  model: 'accounts/fireworks/models/llama-v2-70b-chat',
+  stream: true,
+  messages: messages,
+    max_tokens: 1000,
+    temperature: 0.75,
+    top_p: 1,
+  })
 
-    const response = await hf.textGenerationStream({
-        model: 'OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5',
-        inputs: experimental_buildOpenAssistantPrompt(messages),
-        parameters: {
-        max_new_tokens: 200,
-      // @ts-ignore (this is a valid parameter specifically in OpenAssistant models)
-        typical_p: 0.2,
-        repetition_penalty: 1,
-        truncate: 1000,
-        return_full_text: false,
-    },})
+  // Convert the response into a friendly text-stream
+  const stream = OpenAIStream(response)
 
-    const stream = HuggingFaceStream(response)
-    return new StreamingTextResponse(stream)
-};
+  // Respond with the stream
+  return new StreamingTextResponse(stream)
+}) satisfies RequestHandler

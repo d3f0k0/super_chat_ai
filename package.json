@@ -20,7 +20,7 @@
 	},
 	"type": "module",
 	"dependencies": {
-		"@huggingface/inference": "^2.6.3",
-		"ai": "^2.2.14"
+		"ai": "^2.2.14",
+		"openai": "^4.12.1"
 	}
 }
