@@ -1,28 +1,45 @@
-// src/routes/api/chat/+server.ts
+import { COHERE_KEY } from '$env/static/private'
 import type { RequestHandler } from './$types'
-import { OpenAI } from 'openai'
-import { OPENAI_KEY } from '$env/static/private'
-import { OpenAIStream, StreamingTextResponse } from 'ai'
 
-const fireworks = new OpenAI({baseURL: 'https://api.fireworks.ai/inference/v1', apiKey: OPENAI_KEY!})
+
+// Build a prompt from the messages
+function buildPrompt(messages: { content: string; role: 'system' | 'user' | 'assistant' }[]) {
+  return (
+    messages
+      .map(({ content, role }) => {
+        if (role === 'user') {
+          return `Human: ${content}`;
+        } else {
+          return `Assistant: ${content}`;
+        }
+      })
+      .join('\n\n') + 'Assistant:'
+  );
+}
 
 export const POST = (async ({ request }) => {
   // Extract the `messages` from the body of the request
   const { messages } = await request.json();
 
-  // Request the Fireworks API for the response based on the prompt
-  const response = await fireworks.chat.completions.create({
-  model: 'accounts/fireworks/models/llama-v2-70b-chat',
-  stream: true,
-  messages: messages,
-    max_tokens: 1000,
-    temperature: 0.75,
-    top_p: 1,
+  // Request the Cohere API for the response based on the prompt
+  const response = await fetch('https://api.cohere.ai/generate', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${COHERE_KEY}`,
+      'Cohere-Version': '2022-12-06',
+    },
+    body: JSON.stringify({
+        model: 'command-nightly',
+      prompt: buildPrompt(messages),
+      return_likelihoods: "NONE",
+      max_tokens: 200,
+      temperature: 0.9,
+      top_p: 1,
+    }),
   })
 
-  // Convert the response into a friendly text-stream
-  const stream = OpenAIStream(response)
-
-  // Respond with the stream
-  return new StreamingTextResponse(stream)
+  const result = await response.json()
+  return new Response(result.generations[0].text.substring(0))
 }) satisfies RequestHandler
